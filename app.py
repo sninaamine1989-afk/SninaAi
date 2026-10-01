@@ -1,3 +1,4 @@
+import base64
 import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -7,7 +8,9 @@ app = Flask(__name__)
 CORS(app)
 
 HF_API_TOKEN = os.environ.get('HUGGINGFACE_API_TOKEN')
-API_URL = 'https://api-inference.huggingface.co/models/google/flan-t5-large'
+
+# استخدام نموذج مجاني قوي لتوليد الصور من النصوص (Stable Diffusion)
+API_URL = 'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1'
 
 
 @app.route('/generate', methods=['POST'])
@@ -16,8 +19,7 @@ def generate():
     task_mode = request.form.get('mode', 'text-to-video')
     prompt = request.form.get('prompt', '')
 
-    print(f'--- تنفيذ مهمة: {task_mode} ---')
-    print(f'المدخلات: {prompt}')
+    print(f'--- تنفيذ طلب الوسائط: {prompt} ---')
 
     if not HF_API_TOKEN:
       return (
@@ -33,27 +35,32 @@ def generate():
     headers = {'Authorization': f'Bearer {HF_API_TOKEN}'}
     payload = {'inputs': prompt}
 
-    generated_text = (
-        f'تم استقبال طلبك بنجاح وتمت معالجة الفكرة: "{prompt}" عبر Snina Ai!'
-    )
+    # إرسال الطلب لنموذج توليد الصور
+    response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
 
-    try:
-      response = requests.post(API_URL, headers=headers, json=payload, timeout=5)
-      if response.status_code == 200:
-        result = response.json()
-        if isinstance(result, list) and len(result) > 0:
-          generated_text = result[0].get('generated_text', generated_text)
-        elif isinstance(result, dict) and 'generated_text' in result:
-          generated_text = result['generated_text']
-    except Exception as api_err:
-      print(f'تنبيه اتصال خارجي: {api_err}')
-      # الاستمرار بشكل طبيعي دون توقف السيرفر
+    if response.status_code == 200:
+      # تحويل الصورة القادمة من الذكاء الاصطناعي إلى صيغة تظهر مباشرة في المتصفح
+      image_bytes = response.content
+      image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+      image_url = f'data:image/jpeg;base64,{image_base64}'
 
-    return jsonify({
-        'success': True,
-        'video_url': 'https://www.w3schools.com/html/mov_bbb.mp4',
-        'message': generated_text,
-    })
+      return jsonify({
+          'success': True,
+          'video_url': (  # سنستخدم نفس الحقل لعرض النتيجة البصرية
+              image_url
+          ),
+          'message': f'تم توليد الوسائط بنجاح بناءً على طلبك: "{prompt}"',
+      })
+    else:
+      return (
+          jsonify({
+              'success': False,
+              'error': (
+                  'النموذج يحمل حالياً أو يتم تجهيزه، حاول مرة أخرى بعد قليل.'
+              ),
+          }),
+          500,
+      )
 
   except Exception as e:
     return jsonify({'success': False, 'error': str(e)}), 500
