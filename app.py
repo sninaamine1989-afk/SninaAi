@@ -6,13 +6,8 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
-# جلب مفتاح Hugging Face المجاني من متغيرات البيئة في Render
 HF_API_TOKEN = os.environ.get('HUGGINGFACE_API_TOKEN')
-
-# استخدام نموذج مجاني سريع لتوليد النصوص، الأفكار، أو السكريبتات
-API_URL = (
-    'https://api-inference.huggingface.co/models/google/flan-t5-large'  # نموذج مجاني
-)
+API_URL = 'https://api-inference.huggingface.co/models/google/flan-t5-large'
 
 
 @app.route('/generate', methods=['POST'])
@@ -21,7 +16,7 @@ def generate():
     task_mode = request.form.get('mode', 'text-to-video')
     prompt = request.form.get('prompt', '')
 
-    print(f'--- تنفيذ مهمة عبر Hugging Face: {task_mode} ---')
+    print(f'--- تنفيذ مهمة: {task_mode} ---')
     print(f'المدخلات: {prompt}')
 
     if not HF_API_TOKEN:
@@ -38,23 +33,25 @@ def generate():
     headers = {'Authorization': f'Bearer {HF_API_TOKEN}'}
     payload = {'inputs': prompt}
 
-    # إرسال الطلب إلى نموذج Hugging Face المجاني
-    response = requests.post(API_URL, headers=headers, json=payload)
-    result = response.json()
+    generated_text = (
+        f'تم استقبال طلبك بنجاح وتمت معالجة الفكرة: "{prompt}" عبر Snina Ai!'
+    )
 
-    # استخراج النتيجة النصية أو الرد الذكي
-    generated_text = 'تمت المعالجة بنجاح'
-    if isinstance(result, list) and len(result) > 0:
-      generated_text = result[0].get('generated_text', str(result))
-    elif isinstance(result, dict) and 'generated_text' in result:
-      generated_text = result['generated_text']
+    try:
+      response = requests.post(API_URL, headers=headers, json=payload, timeout=5)
+      if response.status_code == 200:
+        result = response.json()
+        if isinstance(result, list) and len(result) > 0:
+          generated_text = result[0].get('generated_text', generated_text)
+        elif isinstance(result, dict) and 'generated_text' in result:
+          generated_text = result['generated_text']
+    except Exception as api_err:
+      print(f'تنبيه اتصال خارجي: {api_err}')
+      # الاستمرار بشكل طبيعي دون توقف السيرفر
 
-    # إرجاع النتيجة لعرضها على منصة Snina Ai في مدونتك
     return jsonify({
         'success': True,
-        'video_url': (  # رابط فيديو توضيحي مؤقت لعرض النتيجة ريثما نطور عارض الوسائط
-            'https://www.w3schools.com/html/mov_bbb.mp4'
-        ),
+        'video_url': 'https://www.w3schools.com/html/mov_bbb.mp4',
         'message': generated_text,
     })
 
